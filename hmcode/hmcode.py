@@ -4,19 +4,28 @@ from time import time
 # Third-party imports
 import numpy as np
 import camb
-import pyhalomodel as halo
+#import pyhalomodel as halo
 
 # Project imports
-from . import utility as util
-from . import cosmology
-from . import linear_growth
+import utility as util
+import cosmology
+import linear_growth
+
+from cmnew.c_m_correct import plotshow
+from cmnew.c_m_correct import c_fit, c_correct
+from pyhalomodel.pyhalomodel import pyhalomodel as halo
+
+import os
+cwd_path = os.path.dirname(__file__)
+path = cwd_path + '/hmf/temp'
 
 # Parameters
 Pk_lin_extrap_kmax = 1e10 # NOTE: This interplays with the sigmaV integration in a disconcerting way
 sigma_cold_approx = False # Should the Eisenstein & Hu (1999) approximation be used for the cold transfer function?
 
-def power(k:np.array, zs:np.array, CAMB_results:camb.CAMBdata, T_AGN=None,
-          Mmin=1e0, Mmax=1e18, nM=256, tweaks=True, verbose=False) -> np.ndarray:
+def power(k: np.array, zs: np.array, CAMB_results: camb.CAMBdata, SN1, AGN1, SN2, AGN2, hmfsup=False, a1=1, a2=1, a_node=1,
+          T_AGN=None, Mmin=1e8, Mmax=1e16, nM=256, cMrelation='new', sim='TNG', tweaks=False, verbose=False, plot_fit=False,
+          plot_correct=False) -> np.ndarray:
     '''
     Calculates the HMcode matter-matter power spectrum
     Args:
@@ -112,9 +121,21 @@ def power(k:np.array, zs:np.array, CAMB_results:camb.CAMBdata, T_AGN=None,
             print('Linear collapse threshold: {:.4}'.format(dc))
             print('Virial halo overdensity: {:.4}'.format(Dv))
 
+        # Produce the Peak height of zs, including z=4.0
+        
+        reds = zs.copy()
+        if np.max(reds)<4:
+            reds=np.append(reds,4.0)
+        for iz_e, z_e in enumerate(reds):
+            M_hmf_intp = 10**np.arange(8, 16, 0.5)
+            R_hmf_intp = Lagrangian_radius(M=M_hmf_intp, Om_m=Om_m)
+            sM_hmf_intp = _get_sigmaR(R_hmf_intp, iz_e, CAMB_results, cold=True)
+            nu_hmf_intp = _peak_height(M_hmf_intp, sM_hmf_intp, dc=dc)
+            if hmfsup:
+                np.savetxt(path + f'/nu{z_e}.txt', nu_hmf_intp)
 
         # Initialise halo model
-        hmod = halo.model(z, Om_m, name='Sheth & Tormen (1999)', Dv=Dv, dc=dc)
+        hmod = halo.model(z, reds, Om_m, M, name='Sheth & Tormen (1999)', Dv=Dv, dc=dc, hmfsup=hmfsup, a1=a1, a2=a2, a_node=a_node, sim=sim)
 
         # Linear power and associated quantities
         # Note that the cold matter spectrum is defined via 1+delta_c = rho_c/\bar{rho}_c
@@ -123,12 +144,13 @@ def power(k:np.array, zs:np.array, CAMB_results:camb.CAMBdata, T_AGN=None,
         # *greater* than the corresponding quantities for the total matter field on scales where
         # massive neutrinos are smoothly distributed
         Pk_lin = Pk_lin_interp(z, k)  # Linear power spectrum
-        R = hmod.Lagrangian_radius(M) # Lagrangian radii
-        if sigma_cold_approx: # Variance in cold matter field
+        M0 = util.logspace(1e0, 1e18, 256)
+        R = hmod.Lagrangian_radius(M0)  # Lagrangian radii
+        if sigma_cold_approx:  # Variance in cold matter field
             sigmaM = _get_sigmaR_approx(R, g, lambda k: Pk_lin_interp(z, k), CAMB_results, cold=True)
         else:
-            sigmaM = _get_sigmaR(R, iz, CAMB_results, cold=True) 
-        nu = hmod._peak_height(M, sigmaM) # Halo peak height
+            sigmaM = _get_sigmaR(R, iz, CAMB_results, cold=True)
+        nu = hmod._peak_height(M0, sigmaM)  # Halo peak height
         if verbose:
             print('Lagrangian radius range: {:.4} -> {:.4} Mpc/h'.format(R[0], R[-1]))
             print('RMS in matter field range: {:.4} -> {:.4}'.format(sigmaM[0], sigmaM[-1]))
@@ -136,6 +158,7 @@ def power(k:np.array, zs:np.array, CAMB_results:camb.CAMBdata, T_AGN=None,
 
         # Parameters of the linear spectrum pertaining to non-linear growth
         # TODO: I think the sigmaV integral is quite time-consuming for some reason
+        #print(f'R={R}')
         Rnl = _get_nonlinear_radius(R[0], R[-1], dc, iz, CAMB_results, cold=True) # Non-linear Lagrangian radius
         sigma8 = _get_sigmaR(8., iz, CAMB_results, cold=True)                     # RMS in the linear cold matter field at 8 Mpc/h
         sigmaV = cosmology.sigmaV(0., lambda k: Pk_lin_interp(z, k), kmin=kmin)   # RMS in the linear displacement field
@@ -180,9 +203,14 @@ def power(k:np.array, zs:np.array, CAMB_results:camb.CAMBdata, T_AGN=None,
             print()
 
         # Halo concentration
-        zf = _get_halo_collapse_redshifts(M, z, iz, dc, growth, CAMB_results, cold=True) # Halo formation redshift
-        c = B*(1+zf)/(1.+z)                                                              # Halo concentration; equation (20)
-        c *= (growth(ac)/growth_LCDM(ac))*(growth_LCDM(a)/growth(a))                     # Dolag correction; equation (22)
+        if cMrelation == 'old':
+            zf = _get_halo_collapse_redshifts(M, z, iz, dc, growth, CAMB_results, cold=True)  # Halo formation redshift
+            c = B * (1 + zf) / (1. + z)  # Halo concentration; equation (20)
+            c *= (growth(ac) / growth_LCDM(ac)) * (growth_LCDM(a) / growth(a))  # Dolag correction; equation (22)
+        else:
+            c_fitted = c_fit(M, z, iz, om=Om_mz, s8=sigma8, sn1=SN1, agn1=AGN1, sn2=SN2, agn2=AGN2, sim=sim, plot=plot_fit,
+                             plot_c=plot_correct)
+            c = c_correct(M, iz, z, c_fitted, om=Om_mz, s8=sigma8, sn1=SN1, agn1=AGN1, sn2=SN2, agn2=AGN2, sim=sim, plot=plot_correct)
 
         # Halo profile
         # Note the correction for neutrino mass in the profile amplitude here
@@ -214,7 +242,7 @@ def power(k:np.array, zs:np.array, CAMB_results:camb.CAMBdata, T_AGN=None,
         Pk_HMcode[iz, :] = Pk_hm
 
     if T_AGN and tweaks:
-        suppression = _get_feedback_suppression(k, zs, CAMB_results, T_AGN, Mmin=Mmin, Mmax=Mmax, nM=nM, verbose=False)
+        suppression = _get_feedback_suppression(k, zs, CAMB_results, T_AGN, SN1=SN1, AGN1=AGN1, SN2=SN2, AGN2=AGN2, Mmin=Mmin, Mmax=Mmax, nM=nM, verbose=False)
         Pk_HMcode *= suppression
 
     # Finish
@@ -360,7 +388,7 @@ def _get_feedback_parameters(T_AGN:float) -> dict:
     return params
 
 
-def _get_feedback_suppression(k:np.array, zs:np.array, CAMB_results:camb.CAMBdata, T_AGN:float, 
+def _get_feedback_suppression(k:np.array, zs:np.array, CAMB_results:camb.CAMBdata, T_AGN:float, SN1, AGN1, SN2, AGN2, 
                               Mmin=1e0, Mmax=1e18, nM=256, verbose=False) -> np.ndarray:
     '''
     Calculates the ratio of the powerspectrum with baryonic effects to that of dark-matter-only
@@ -368,8 +396,23 @@ def _get_feedback_suppression(k:np.array, zs:np.array, CAMB_results:camb.CAMBdat
     Warning: Since the fit for the baryonic effects was obtained with the vanilla halo model, 
     it is not safe to set tweaks=True below
     '''
-    Pk_gravity = power(k, zs, CAMB_results, T_AGN=None, Mmin=Mmin, Mmax=Mmax, nM=nM, 
+    Pk_gravity = power(k, zs, CAMB_results, SN1=SN1, AGN1=AGN1, SN2=SN2, AGN2=AGN2, T_AGN=None, Mmin=Mmin, Mmax=Mmax, nM=nM, 
                        tweaks=False, verbose=verbose)
-    Pk_feedback = power(k, zs, CAMB_results, T_AGN=T_AGN, Mmin=Mmin, Mmax=Mmax, nM=nM, 
+    Pk_feedback = power(k, zs, CAMB_results, SN1=SN1, AGN1=AGN1, SN2=SN2, AGN2=AGN2, T_AGN=T_AGN, Mmin=Mmin, Mmax=Mmax, nM=nM, 
                         tweaks=False, verbose=verbose)
     return Pk_feedback/Pk_gravity
+
+def _peak_height(M: np.ndarray, sigmaM: np.ndarray, dc) -> np.ndarray:
+    '''
+    Calculate peak-height (nu) values from array of halo masses
+    '''
+    nu = dc/sigmaM
+    return nu
+
+def Lagrangian_radius(M: np.ndarray, Om_m) -> np.ndarray:
+    '''
+    Radius [Mpc/h] of a sphere containing mass M in a homogeneous universe
+    Args:
+        M: Halo masses [Msun/h]
+    '''
+    return cosmology.Lagrangian_radius(M, Om_m)
