@@ -5,6 +5,7 @@ from time import time
 import numpy as np
 import camb
 #import pyhalomodel as halo
+import matplotlib.pyplot as plt
 
 # Project imports
 import utility as util
@@ -16,6 +17,7 @@ from cmnew.c_m_correct import c_fit, c_correct
 from pyhalomodel.pyhalomodel import pyhalomodel as halo
 
 import os
+
 cwd_path = os.path.dirname(__file__)
 path = cwd_path + '/hmf/temp'
 
@@ -208,9 +210,8 @@ def power(k: np.array, zs: np.array, CAMB_results: camb.CAMBdata, SN1, AGN1, SN2
             c = B * (1 + zf) / (1. + z)  # Halo concentration; equation (20)
             c *= (growth(ac) / growth_LCDM(ac)) * (growth_LCDM(a) / growth(a))  # Dolag correction; equation (22)
         else:
-            c_fitted = c_fit(M, z, iz, om=Om_mz, s8=sigma8, sn1=SN1, agn1=AGN1, sn2=SN2, agn2=AGN2, sim=sim, plot=plot_fit,
-                             plot_c=plot_correct)
-            c = c_correct(M, iz, z, c_fitted, om=Om_mz, s8=sigma8, sn1=SN1, agn1=AGN1, sn2=SN2, agn2=AGN2, sim=sim, plot=plot_correct)
+            c = c_correct(M, z, om=Om_mz, s8=sigma8, sn1=SN1, agn1=AGN1, sn2=SN2, agn2=AGN2, sim=sim, plot=plot_correct)
+            #plt.loglog(M, c, label='c(z={:.2f})'.format(z))
 
         # Halo profile
         # Note the correction for neutrino mass in the profile amplitude here
