@@ -25,8 +25,9 @@ path = cwd_path + '/hmf/temp'
 Pk_lin_extrap_kmax = 1e10 # NOTE: This interplays with the sigmaV integration in a disconcerting way
 sigma_cold_approx = False # Should the Eisenstein & Hu (1999) approximation be used for the cold transfer function?
 
-def power(k: np.array, zs: np.array, CAMB_results: camb.CAMBdata, SN1, AGN1, SN2, AGN2, hmfsup=False, a1=1, a2=1, a_node=1,
-          T_AGN=None, Mmin=1e8, Mmax=1e16, nM=256, cMrelation='new', sim='TNG', tweaks=False, verbose=False, plot_fit=False,
+def power(k: np.array, zs: np.array, CAMB_results: camb.CAMBdata, SN1=1, AGN1=1, SN2=1, AGN2=1, 
+          cM='new', cMsim='TNG', hmfsup=False, a1=1, a2=1, a_node=1, 
+          T_AGN=None, Mmin=1e8, Mmax=1e16, nM=256, tweaks=False, verbose=False, plot_fit=False,
           plot_correct=False) -> np.ndarray:
     '''
     Calculates the HMcode matter-matter power spectrum
@@ -137,7 +138,8 @@ def power(k: np.array, zs: np.array, CAMB_results: camb.CAMBdata, SN1, AGN1, SN2
                 np.savetxt(path + f'/nu{z_e}.txt', nu_hmf_intp)
 
         # Initialise halo model
-        hmod = halo.model(z, reds, Om_m, M, name='Sheth & Tormen (1999)', Dv=Dv, dc=dc, hmfsup=hmfsup, a1=a1, a2=a2, a_node=a_node, sim=sim)
+        hmod = halo.model(z, reds, Om_m, M, name='Sheth & Tormen (1999)', Dv=Dv, dc=dc, 
+                          hmfsup=hmfsup, a1=a1, a2=a2, a_node=a_node, sim='TNG')
 
         # Linear power and associated quantities
         # Note that the cold matter spectrum is defined via 1+delta_c = rho_c/\bar{rho}_c
@@ -205,12 +207,13 @@ def power(k: np.array, zs: np.array, CAMB_results: camb.CAMBdata, SN1, AGN1, SN2
             print()
 
         # Halo concentration
-        if cMrelation == 'old':
+        if cM == 'old':
             zf = _get_halo_collapse_redshifts(M, z, iz, dc, growth, CAMB_results, cold=True)  # Halo formation redshift
             c = B * (1 + zf) / (1. + z)  # Halo concentration; equation (20)
             c *= (growth(ac) / growth_LCDM(ac)) * (growth_LCDM(a) / growth(a))  # Dolag correction; equation (22)
         else:
-            c = c_correct(M, z, om=Om_mz, s8=sigma8, sn1=SN1, agn1=AGN1, sn2=SN2, agn2=AGN2, sim=sim, plot=plot_correct)
+            c = c_correct(M, z, om=Om_mz, s8=sigma8, sn1=SN1, agn1=AGN1, sn2=SN2, agn2=AGN2, 
+                          sim=cMsim, plot=plot_correct)
             #plt.loglog(M, c, label='c(z={:.2f})'.format(z))
 
         # Halo profile
