@@ -9,7 +9,7 @@ zs = np.array([0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0])
 
 path = '/home/wbc/code/HMcode-python/hmcode/temp'
 
-class HMF_supression_Model(object):
+class bias_supression_Model(object):
     def __init__(self, sim, reds, nu):
         if sim not in avail_sims:
             raise ValueError("Requested sim, %s, is not available. Choose one of "%sim + str(avail_sims))
@@ -22,9 +22,9 @@ class HMF_supression_Model(object):
     def load_data(self):
         for i in range(0, 9):
             if i == 0:
-                temp = np.loadtxt(cwd_path+f'/../regression/regression_{zs[i]}.txt')
+                temp = np.loadtxt(cwd_path+f'/../regression/{zs[i]}_bias_ratio.txt')
             else:
-                temp = np.concatenate((temp, np.loadtxt(cwd_path+f'/../regression/regression_{zs[i]}.txt')), axis=0)
+                temp = np.concatenate((temp, np.loadtxt(cwd_path+f'/../regression/{zs[i]}_bias_ratio.txt')), axis=0)
         self.Mvir_regression = temp[:, 0]
         self.sup_regression  = temp[:, 1]
         self.z_regression    = temp[:, 2]
@@ -120,13 +120,13 @@ class HMF_supression_Model(object):
             #print(f'S_temp={S_temp}')
             
             S1 = interpolator(np.column_stack((Mvir / a_node, z_arr)))
-            S1[np.isnan(S1)] = np.nanmin(S1)
+            S1[np.isnan(S1)] = 1
             
-            S_node = np.nanmax(S_temp[Mvir <= 13])
-            node_index = np.where(S_temp == S_node)[0]
-            #print(f'S_node={S_node}, node_index={node_index}')
+            # S_node = np.nanmax(S_temp[Mvir <= 13])
+            # node_index = np.where(S_temp == S_node)[0]
+            # #print(f'S_node={S_node}, node_index={node_index}')
             
-            M_node_re = Mvir[node_index] * a_node
+            M_node_re = 12 * a_node
             mask = Mvir <= M_node_re
             node_ind_re = int(np.sum(mask))
             
@@ -152,7 +152,7 @@ class HMF_supression_Model(object):
                     raise IOError(f"Error loading files: {e}")
                 
                 points_nu = points_i + (points_i_plus_one - points_i) * (z_i - zs[z_ind]) / (zs[z_ind + 1] - zs[z_ind])
-                
+
             interpolator_nu = interp1d(points_nu, S1, bounds_error=False, fill_value=1.0)
                 
             if isinstance(nue, (np.float64, float)):

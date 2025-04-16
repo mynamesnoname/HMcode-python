@@ -19,14 +19,14 @@ from pyhalomodel.pyhalomodel import pyhalomodel as halo
 import os
 
 cwd_path = os.path.dirname(__file__)
-path = cwd_path + '/hmf/temp'
+path = cwd_path + '/temp'
 
 # Parameters
 Pk_lin_extrap_kmax = 1e10 # NOTE: This interplays with the sigmaV integration in a disconcerting way
 sigma_cold_approx = False # Should the Eisenstein & Hu (1999) approximation be used for the cold transfer function?
 
 def power(k: np.array, zs: np.array, CAMB_results: camb.CAMBdata, SN1=1, AGN1=1, SN2=1, AGN2=1, 
-          cM='new', cMsim='TNG', hmfsup=False, a1=1, a2=1, a_node=1, 
+          cM='new', cMsim='TNG', hmfsup=False, biassup=False, a1=1, a2=1, a_node=1, 
           T_AGN=None, Mmin=1e8, Mmax=1e16, nM=256, tweaks=False, verbose=False, plot_fit=False,
           plot_correct=False) -> np.ndarray:
     '''
@@ -130,7 +130,7 @@ def power(k: np.array, zs: np.array, CAMB_results: camb.CAMBdata, SN1=1, AGN1=1,
         if np.max(reds)<4:
             reds=np.append(reds,4.0)
         for iz_e, z_e in enumerate(reds):
-            M_hmf_intp = 10**np.arange(8, 16, 0.5)
+            M_hmf_intp = 10**np.arange(8.5, 14, 0.1)
             R_hmf_intp = Lagrangian_radius(M=M_hmf_intp, Om_m=Om_m)
             sM_hmf_intp = _get_sigmaR(R_hmf_intp, iz_e, CAMB_results, cold=True)
             nu_hmf_intp = _peak_height(M_hmf_intp, sM_hmf_intp, dc=dc)
@@ -139,7 +139,7 @@ def power(k: np.array, zs: np.array, CAMB_results: camb.CAMBdata, SN1=1, AGN1=1,
 
         # Initialise halo model
         hmod = halo.model(z, reds, Om_m, M, name='Sheth & Tormen (1999)', Dv=Dv, dc=dc, 
-                          hmfsup=hmfsup, a1=a1, a2=a2, a_node=a_node, sim='TNG')
+                          hmfsup=hmfsup, biassup=biassup, a1=a1, a2=a2, a_node=a_node, sim='TNG')
 
         # Linear power and associated quantities
         # Note that the cold matter spectrum is defined via 1+delta_c = rho_c/\bar{rho}_c
