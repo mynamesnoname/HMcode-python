@@ -86,7 +86,7 @@ def c_fit(M, z, iz, om, s8, sn1, agn1, sn2, agn2, sim, plot=False, plot_c=False)
     return c_fitted
 
 
-def c_correct(M, z, sim='DMO', om=Omm, s8=sigma8, sn1=1, agn1=1, sn2=1, agn2=1, plot=False):
+def c_correct_0(M, z, sim='DMO', om=Omm, s8=sigma8, sn1=1, agn1=1, sn2=1, agn2=1, plot=False):
     Ms_to_correct = [] # pickout the points that can be corrected directly by model.predict
 
     maskmid = np.logical_and(M >= Mvir[0], M <= Mvir[-1])
@@ -111,6 +111,18 @@ def c_correct(M, z, sim='DMO', om=Omm, s8=sigma8, sn1=1, agn1=1, sn2=1, agn2=1, 
 
     if plot:
         plt.loglog(M, c, '-', color='C%d' % z, label='z={:}'.format(z))
+
+    return c
+
+def c_correct(M, z, sim='DMO', om=Omm, s8=sigma8, sn1=1, agn1=1, sn2=1, agn2=1, 
+                a1=1, a2=1, a_node=1, plot=False):
+    c = c_correct_0(M/a_node, z, sim, om, s8, sn1, agn1, sn2, agn2, plot)
+
+    c_dmo = c_correct_0(M/a_node, z, sim='DMO', om=om, s8=s8, sn1=1, agn1=1, sn2=1, agn2=1, plot=plot)
+
+    mask_ini = M <= 12*a_node
+    c[mask_ini] = c_dmo[mask_ini] + (c[mask_ini]-c_dmo[mask_ini]) * a1
+    c[~mask_ini] = c_dmo[~mask_ini] + (c[~mask_ini]-c_dmo[~mask_ini]) * a1
 
     return c
 

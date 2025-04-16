@@ -15,3 +15,6 @@ poetry.lock
 
 # VScode
 .vscode/
+
+# Other
+/home/wbc/code/HMcode-python/hmcode/temp/

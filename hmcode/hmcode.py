@@ -213,7 +213,7 @@ def power(k: np.array, zs: np.array, CAMB_results: camb.CAMBdata, SN1=1, AGN1=1,
             c *= (growth(ac) / growth_LCDM(ac)) * (growth_LCDM(a) / growth(a))  # Dolag correction; equation (22)
         else:
             c = c_correct(M, z, om=Om_mz, s8=sigma8, sn1=SN1, agn1=AGN1, sn2=SN2, agn2=AGN2, 
-                          sim=cMsim, plot=plot_correct)
+                          sim=cMsim, a1=a1, a2=a2, a_node=a_node, plot=plot_correct)
             #plt.loglog(M, c, label='c(z={:.2f})'.format(z))
 
         # Halo profile
